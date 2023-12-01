@@ -7,45 +7,39 @@ section .text
 %define disk_buffer data                 ; Don't want unaligned reads
 %define num_sectors ((22521 / 512) + 1)  ; Input file is 22521 bytes, so we need to make sure that we have enough space
 
-%macro print_char 1
-        mov ax, $1
-        stosb
-        mov ax, 0x07
-        stosb
+%macro begin_print 0
+	push ax
+        mov ax, 0xb800          ; Console memory is at 0xb8000; set up a segment
+        mov es, ax              ; for the start of the console text.
+	xor di, di              ; Clear the data index so that 'stosb' pushes to video memory.
+	pop ax
 %endmacro
 
 boot:
-        mov ax, (data / 0x10)
-        mov ds, ax
-        mov ax, 0xffff
+        mov ax, (0xd7f0 / 10)     ; Stack segment starts right after input file.
         mov ss, ax
-        mov [disk_num], dl      ; Stash the disk number into memory.
+	mov sp, (0xffff - 0xd7f0) ; Stack pointer points to top of memory.
+        mov [disk_num], dl        ; Stash the disk number into memory.
         cld
 
 main:
-        ; Clear the screen
-        mov ax, 0xb800           ; Console memory is at 0xb8000; set up a segment
-        mov es, ax               ; for the start of the console text.
-        mov ax, es
-        xor di, di
-        mov cx, 80*25            ; Number of chars in the screen
-        mov al, ` `              ; Space character
-        mov ah, 0x0f             ; Color (white on black)
-        repne stosw              ; Copy!
+	; Clear the screen
+	mov ah, 0x07        ; We want to scroll the screen
+	mov al, 0x00        ; Setting %al to 0 clears the screen
+	mov bh, 0x07        ; Background color is black, foreground is white
+	mov cx, 0x00        ; Top of screen is (0,0)
+	mov dh, 24          ; 24 rows of chars
+	mov dl, 79          ; 79 cols of chars
+	int 0x10            ; Ask the BIOS to scroll the screen
 
                                 ; Read data from disk
         call load_file
         call part1
-	mov bx, ax
+
+	begin_print
         call print_digits
-	; print_char `a`
-	; print_char `a`
-	; print_char `a`
-	; print_char `a`
-	; print_char `a`
-	; print_char `a`
-	; pop bx
-        ; call print_digits
+	mov bx, cx
+        call print_digits
 sleep:
         hlt                      ; Halts CPU until the next external interrupt is fired
         jmp sleep                ; Loop forever
@@ -68,8 +62,8 @@ load_file:
 
         
         mov si, 0x00            ; Set up the source index for 'lodsb',
-        ; mov bx, (data / 0x10)   ; and set the data segment to '0x7e00'
-        ; mov ds, bx
+        mov bx, (data / 0x10)   ; and set the data segment to '0x7e00'
+        mov ds, bx
         ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -80,8 +74,11 @@ load_file:
 ;; %si stores offset into string
 ;; Clobbers %ax, %bx, %cx, %dx
 ;; Updates %si to the end of the string.
+;; Outputs low portion in %cx, high in %bx
 part1:
         mov dx, 10              ; Set %dx to 10 for later multiplications
+	push 0
+	push 0
 .read_line:
 	xor ax, ax              ; Initialize %ax to 0
         xor bx, bx              ; Initialize %bx to 0 
@@ -107,19 +104,28 @@ part1:
         mov al, bl              ; Move the first digit into %ax,
         mul dx                  ; and then multiply by 10.
         add al, cl              ; Next, add on the second digit.
-	; TODO: jump back to read_line + push
+	pop bx                  ; Now that we have our number, let's pop off the low part of the accumulator
+	add ax, bx              ; Add the number and accumulator, check for overflow
+	jno .no_overflow
+.overflow:
+	pop cx                  ; If there was overflow, then we need to update the high portion
+	inc cx                  ; Pop, increment, and push
+	push cx
+.no_overflow:
+	push ax                 ; Finally, push the low portion.
+	jmp .read_line
 .done:
+	pop bx
+	pop cx
         ret
 
 ;; Calling Convention:
-;; %bx holds number
+;; Input:
+;; %bx holds number to be printed
 ;; %cx holds number of digits, 1 indexed.
 print_digits:
-        mov ax, 0xb800          ; Console memory is at 0xb8000; set up a segment
-        mov es, ax              ; for the start of the console text.
         mov ax, bx              ; Move the number into %ax,
-        xor cx, cx              ; We will use %bx to count the number of digits
-        xor di, di              ; Clear %si, will be used for pushing bytes
+        xor cx, cx              ; We will use %cx to count the number of digits
 .push:
         cmp ax, 0
         je .print
