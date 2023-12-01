@@ -36,8 +36,14 @@ main:
                                 ; Read data from disk
         call load_file
         call part1
-	pop bx
+	mov bx, ax
         call print_digits
+	; print_char `a`
+	; print_char `a`
+	; print_char `a`
+	; print_char `a`
+	; print_char `a`
+	; print_char `a`
 	; pop bx
         ; call print_digits
 sleep:
@@ -76,42 +82,32 @@ load_file:
 ;; Updates %si to the end of the string.
 part1:
         mov dx, 10              ; Set %dx to 10 for later multiplications
-	push 0 			; We will use the stack to hold our accumulator.
-	push 0 			; The value may exceed 65535, so we need to use 2 registers worth of space.
-.read_file:
+.read_line:
 	xor ax, ax              ; Initialize %ax to 0
         xor bx, bx              ; Initialize %bx to 0 
         xor cx, cx              ; Initialize %cx to 0
-.read_line:
+.read_char:
         lodsb                   ; Load a byte into %al, incrementing %si
+	cmp al, 0               ; If we are looking at 0, then we have hit EOf
+	je .done                ; This means we are done, so we bail out.
         cmp al, `\n`            ; Check if we are looking at a newline,
         je .add_digits          ; if we are, then we proceed to add the 2 digits we've seen.
-	; cmp al, 0               ; If we are looking at 0, then we have hit EOf
-	je .done                ; This means we are done, so we bail out.
         cmp al, `a`             ; Check if we are looking at a letter,
-        jge .read_line          ; If we are, then continue the loop.
+        jge .read_char          ; If we are, then continue the loop.
         sub ax, `0`             ; Convert from ASCII to the actual value
         cmp bl, 0               ; Check to see if this is the first digit we've seen
         jne .not_first          ; If it isn't skip ahead to next part of state machine
 .first:
         mov bl, al              ; Store the first digit we've seen in %bx
-        jmp .read_line
+        jmp .read_char
 .not_first:
         mov cl, al              ; Store the digit in %cx, clobbering any previous value
-        jmp .read_line
+        jmp .read_char
 .add_digits:
         mov al, bl              ; Move the first digit into %ax,
         mul dx                  ; and then multiply by 10.
         add al, cl              ; Next, add on the second digit.
-	pop bx 			; Pop off the lower portion of the accumulator
-	add ax, bx              ; and then add the low portions together.
-	jno .no_overflow	; If there was no overflow, then we do not need to modify the upper portion
-.overflow
-	pop cx                  ; The sum may exceed 65535, so if we overflow,
-	inc cx 			; we need to update the upper portion.
-	push cx      		; Push the higher portion
-.no_overflow
-	push ax                 ; Push the lower portion
+	; TODO: jump back to read_line + push
 .done:
         ret
 
