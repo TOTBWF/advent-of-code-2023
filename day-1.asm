@@ -2,10 +2,9 @@
 [org 0x7c00]     ; BIOS will load us to this address
 section .text
 
-%define data 0x7e00
-%define disk_num data
-%define disk_buffer data                 ; Don't want unaligned reads
-%define num_sectors ((22521 / 512) + 1)  ; Input file is 22521 bytes, so we need to make sure that we have enough space
+%define disk_num (0x7c00 + 512)
+%define disk_buffer (disk_num + 0x02) ; Retain the disk number, don't want unaligned reads
+%define num_sectors 63
 
 %macro begin_print 0
 	push ax
@@ -16,24 +15,24 @@ section .text
 %endmacro
 
 boot:
-        mov ax, (0xd7f0 / 10)     ; Stack segment starts right after input file.
+        mov ax, 0x7000		; Place the stack segment in the upper half of memory
         mov ss, ax
-	mov sp, (0xffff - 0xd7f0) ; Stack pointer points to top of memory.
-        mov [disk_num], dl        ; Stash the disk number into memory.
+	mov sp, 0x2000       	; 8k stack
+        mov [disk_num], dl      ; Stash the disk number into memory.
         cld
 
 main:
 	; Clear the screen
-	mov ah, 0x07        ; We want to scroll the screen
-	mov al, 0x00        ; Setting %al to 0 clears the screen
-	mov bh, 0x07        ; Background color is black, foreground is white
-	mov cx, 0x00        ; Top of screen is (0,0)
-	mov dh, 24          ; 24 rows of chars
-	mov dl, 79          ; 79 cols of chars
-	int 0x10            ; Ask the BIOS to scroll the screen
+	mov ah, 0x07            ; We want to scroll the screen
+	mov al, 0x00            ; Setting %al to 0 clears the screen
+	mov bh, 0x07            ; Background color is black, foreground is white
+	mov cx, 0x00            ; Top of screen is (0,0)
+	mov dh, 24              ; 24 rows of chars
+	mov dl, 79              ; 79 cols of chars
+	int 0x10                ; Ask the BIOS to scroll the screen
 
                                 ; Read data from disk
-        call load_file
+        call load_file		;
         call part1
 
 	begin_print
@@ -50,7 +49,7 @@ sleep:
 ;;; Load the input file into memory, starting at 0x7e00
 load_file:
         mov ah, 0x02            ; We want to read sectors, so we set %ah to 0x02
-        mov al, 1               ; Number of sectors to read
+        mov al, num_sectors     ; Number of sectors to read
         mov ch, 0               ; Cylinder index
         mov cl, 2               ; Sector index
         mov dh, 0               ; Head index
@@ -61,8 +60,8 @@ load_file:
         int 0x13                ; Ask the BIOS to read the data
 
         
-        mov si, 0x00            ; Set up the source index for 'lodsb',
-        mov bx, (data / 0x10)   ; and set the data segment to '0x7e00'
+        mov si, 0x02                ; Set up the source index for 'lodsb'
+        mov bx, (disk_num / 0x10)   ; and set the data segment to '0x7e00'
         mov ds, bx
         ret
 
@@ -76,7 +75,6 @@ load_file:
 ;; Updates %si to the end of the string.
 ;; Outputs low portion in %cx, high in %bx
 part1:
-        mov dx, 10              ; Set %dx to 10 for later multiplications
 	push 0
 	push 0
 .read_line:
@@ -85,7 +83,7 @@ part1:
         xor cx, cx              ; Initialize %cx to 0
 .read_char:
         lodsb                   ; Load a byte into %al, incrementing %si
-	cmp al, 0               ; If we are looking at 0, then we have hit EOf
+	cmp al, 0               ; If we are looking at 0, then we have hit the end of the input.
 	je .done                ; This means we are done, so we bail out.
         cmp al, `\n`            ; Check if we are looking at a newline,
         je .add_digits          ; if we are, then we proceed to add the 2 digits we've seen.
@@ -102,16 +100,21 @@ part1:
         jmp .read_char
 .add_digits:
         mov al, bl              ; Move the first digit into %ax,
-        mul dx                  ; and then multiply by 10.
+	test cl, cl             ; Check to see if we've seen a second digit
+	jz .accumulate
+.add_second_digit:
+        mov dx, 10              ; If we have, multiply %ax then multiply by 10.
+        mul dx                  
         add al, cl              ; Next, add on the second digit.
+.accumulate:
 	pop bx                  ; Now that we have our number, let's pop off the low part of the accumulator
 	add ax, bx              ; Add the number and accumulator, check for overflow
-	jno .no_overflow
-.overflow:
+	jnc .no_carry
+.carry:
 	pop cx                  ; If there was overflow, then we need to update the high portion
 	inc cx                  ; Pop, increment, and push
 	push cx
-.no_overflow:
+.no_carry:
 	push ax                 ; Finally, push the low portion.
 	jmp .read_line
 .done:
@@ -153,4 +156,4 @@ dw 0xaa55                 ; Add boot magic word to mark us as bootable
 
 incbin "day-1-input.txt"
 
-times ((num_sectors + 1) * 512)-($-$$) db 0    ; Pad out to a multiple of 512 bytes
+times (63 * 512)-($-$$) db 0    ; Pad out to a multiple of 512 bytes
