@@ -117,8 +117,288 @@ part1:
 	pop bx
         ret
 
+;; State machine
+
+;; 1,  n -> 7
+;; 7,  e -> 5  (output 1)
+;; 7,  i -> 23
+
+;; 2,  w -> 8
+;; 2,  h -> 9
+
+;; 8,  o -> 1 (output 2)
+
+;; 9,  r -> 10
+;; 10, e -> 11
+;; 11, e -> 5  (output 3)
+;; 11, i -> 20
+
+;; 3,  o -> 12
+;; 3,  i -> 14
+;; 12, u -> 13
+;; 12, n -> 7
+;; 13, r -> 0  (output 4)
+
+;; 14, v -> 15
+;; 15, e -> 5  (output 5)
+
+;; 4,  i -> 16
+;; 4,  e -> 17
+;; 16, x -> 0  (output 6)
+
+;; 17, i -> 20
+;; 17, v -> 18
+;; 18, e -> 19
+;; 19, i -> 20
+;; 19, n -> 6  (output 7)
+
+;; 5,  i -> 20
+;; 20, g -> 21
+;; 21, h -> 22
+;; 22, t -> 2  (output 8)
+
+;; 6,  i -> 23
+;; 23, n -> 24
+;; 24, e -> 5  (output 9)
+;; 24, i -> 23
+
+;; Fallthrough cases:
+;; *, o -> 1
+;; *, t -> 2
+;; *, f -> 3
+;; *, s -> 4
+;; *, e -> 5
+;; *, n -> 6
+
+jump_table:
+	dw 0
+	dw (part2.s01 - part2.s00)
+	dw (part2.s01 - part2.s00)
+	dw (part2.s02 - part2.s00)
+	dw (part2.s03 - part2.s00)
+	dw (part2.s04 - part2.s00)
+	dw (part2.s05 - part2.s00)
+	dw (part2.s06 - part2.s00)
+	dw (part2.s07 - part2.s00)
+	dw (part2.s08 - part2.s00)
+	dw (part2.s09 - part2.s00)
+	dw (part2.s10 - part2.s00)
+	dw (part2.s11 - part2.s00)
+	dw (part2.s12 - part2.s00)
+	dw (part2.s13 - part2.s00)
+	dw (part2.s14 - part2.s00)
+	dw (part2.s15 - part2.s00)
+	dw (part2.s16 - part2.s00)
+	dw (part2.s17 - part2.s00)
+	dw (part2.s18 - part2.s00)
+	dw (part2.s19 - part2.s00)
+	dw (part2.s20 - part2.s00)
+	dw (part2.s21 - part2.s00)
+	dw (part2.s22 - part2.s00)
+	dw (part2.s23 - part2.s00)
+	dw (part2.s24 - part2.s00)
+
+state_0_table:
+	db '00005300000006100042000000'
+
 hex_table:
 	db '0123456789abcdef'
+
+part2:
+	push 0
+	push 0
+.read_line:
+	xor ax, ax              ; Initialize %ax to 0
+        xor bx, bx              ; Initialize %bx to 0 
+        xor cx, cx              ; Initialize %cx to 0
+        xor dx, dx              ; Initialize %dx to 0
+	;; General Algorithm
+.read_char:
+        lodsb                   ; Load a byte into %al, incrementing %si
+	cmp al, 0               ; If we are looking at 0, then we have hit the end of the input.
+	je .done                ; This means we are done, so we bail out.
+        cmp al, `\n`            ; Check if we are looking at a newline,
+        je .add_digits          ; if we are, then we proceed to add the 2 digits we've seen.
+        cmp al, `a`             ; Check if we are looking at a letter,
+        jle .digit              ; If we are, then enter the state machine. If not, then we are looking at a digit.
+	push bx
+	mov bx, jump_table 	
+	xchg al, dl 		; Swap %al and %dl so we can do a table lookup
+	xlat 			; TODO: These should be byte offsets?
+	xchg al, dl
+.s00: 			
+	push bx 		; Grab the new state from the table
+	mov bx, state_0_table
+	xlat
+	mov dl, al
+	pop bx
+	je .read_char
+.s01:
+	cmp al, `n`
+	cmove dl, 7
+	je .read_char
+	jne .s00
+.s02:
+	cmp al, `w`
+	cmove dl, 8
+	je .read_char
+	cmp al, `h`
+	cmove dl, 9
+	je .read_char
+	jne .s00
+.s03:
+	cmp al, `o`
+	cmove dl, 12
+	je .read_char
+	cmp al, `i`
+	cmove dl, 4
+	je .read_char
+	jne .s00
+.s04:
+	cmp al, `i`
+	cmove dl, 16
+	je .read_char
+	cmp al, `e`
+	cmove dl, 17
+	je .read_char
+	jne .s00
+.s05:
+	cmp al, `i`
+	cmove dl, 20
+	je .read_char
+	jne .s00
+.s06:
+	cmp al, `i`
+	cmove dl, 21
+	je .read_char
+	jne .s00
+.s07:
+	cmp al, `e`
+	cmove dl, 5
+	cmove al, 1
+	je .set_digit
+	cmp al, `i`
+	cmove dl, 23
+	je .read_char
+	jne .s00
+.s08:
+	cmp al, `o`
+	cmove dl, 1
+	cmove al, 2
+	je .set_digit
+	jne .s00
+.s09:
+	cmp al, `r`
+	cmove dl, 11
+	je .read_char
+	jne .s00
+.s10:
+	cmp al, `e`
+	cmove dl, 11
+	je .read_char
+	jne .s00
+.s11:
+	cmp al, `e`
+	cmove dl, 5
+	cmove al, 3
+	je .set_digit
+	cmp al, `i`
+	cmove dl, 21
+	je .read_char
+	jne .s00
+.s12:
+	cmp al, `u`
+	cmove dl, 13
+	je .read_char
+	cmp al, `n`
+	cmove dl, 7
+	je .read_char
+	jne .s00
+.s13:
+	cmp al, `r`
+	cmove al, 4
+	je .set_digit
+	jne .s00
+.s14:
+	cmp al, `v`
+	cmove dl, 15
+	je .read_char
+	jne .s00
+.s15:
+	cmp al, `e`
+	cmove al, 5
+	cmove dl, 5
+	je .set_digit
+	jne .s00
+.s16:
+	cmp al, `x`
+	cmove al, 6
+	cmove dl, 0
+	je .set_digit
+	jne .s00
+.s17:
+	cmp al, `v`
+	cmove dl, 18
+	je .read_char
+	cmp al, `g`
+	cmove dl, 21
+	je .read_char
+	jne .s00
+.s18:
+	cmp al, `e`
+	cmove dl, 19
+	je .read_char
+	jne .s00
+.s19:
+	cmp al, `n`
+	cmove al, 7
+	cmove dl, 6
+	je .set_digit
+	cmp al, `g`
+	cmove dl, 21
+	je .read_char
+	jne .s00
+.s20:
+	cmp al, `g`
+	cmove dl, 21
+	je .read_char
+	jne .s00
+.s21:
+	cmp al, `h`
+	cmove dl, 22
+	je .read_char
+	jne .s00
+.s22:
+	cmp al, `t`
+	cmove al, 8
+	cmove dl, 2
+	je .set_digit
+	jne .s00
+.s23:
+	cmp al, `n`
+	cmove dl, 24
+	je .read_char
+	jne .s00
+.s24:
+	cmp al, `e`
+	cmove al, 9
+	cmove dl, 5
+	je .set_digit
+	cmp al, `i`
+	cmove dl, 23
+	je .read_char
+	jne .s00
+
+	
+
+.digit:
+	sub al, `0` 		; Convert to ASCII
+.set_digit:
+        cmp bl, 0               ; Check to see if this is the first digit we've seen
+	cmove bl, al 		; If it is, move it into both positions
+	cmove cl, al
+	cmovne cl, al		; If it isn't, only update the second digit
+	jmp .read_char
 
 ;; Prints contents of %ax as hex.
 ;; Clobbers %bx
@@ -170,35 +450,6 @@ print_digits:
 	stosb
 
 	ret
-
-
-; ;; Input:
-; ;; %bx holds number to be printed
-; ;; %cx holds number of digits, 1 indexed.
-; print_digits:
-;         mov ax, bx              ; Move the number into %ax,
-;         xor cx, cx              ; We will use %cx to count the number of digits
-; .push:
-;         cmp ax, 0
-;         je .print
-;         mov dx, 0               ; Clear %dx so that we don't have an offset for the division 
-;         mov bx, 10              ; Set %cx to the constant 10 for the DIV
-;         div bx                  ; Divide %ax by 10, storing renaminder in %dx
-;         add dx, `0`             ; Convert %dx to ASCII
-;         push dx                 ; Push %dl to the stack, so we can pop off in reverse
-;         inc cx                  ; Increment the count of digits
-;         jmp .push
-; .print:
-;         cmp cx, 0
-;         je .done
-;         pop ax
-;         stosb
-;         mov ax, 0x07
-;         stosb
-;         dec cx
-;         jmp .print
-; .done:
-;         ret
 
 times 510-($-$$) db 0     ; Pad to 510 bytes
 dw 0xaa55                 ; Add boot magic word to mark us as bootable
