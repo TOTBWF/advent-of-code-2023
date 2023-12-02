@@ -7,11 +7,11 @@ section .text
 %define num_sectors 63
 
 %macro begin_print 0
-	push ax
 	mov ax, 0xb800          ; Console memory is at 0xb8000; set up a segment
         mov es, ax              ; for the start of the console text.
 	xor di, di              ; Clear the data index so that 'stosb' pushes to video memory.
-	pop ax
+	mov ax, 0               ; Set the data segment to 0, makes 'xlat' lookups resolve correctly
+	mov ds, ax 		
 %endmacro
 
 boot:
@@ -33,18 +33,10 @@ main:
 
         call load_file		; Read all the data from dist
         call part1
-	push bx
-	push cx
 	begin_print
-	mov ax, 1
+	pop ax
         call print_digits
-	mov ax, 2
-        call print_digits
-	mov ax, 3
-        call print_digits
-	mov ax, 4
-        call print_digits
-	mov ax, 
+	pop ax
         call print_digits
 sleep:
         hlt                      ; Halts CPU until the next external interrupt is fired
@@ -100,19 +92,16 @@ part1:
         jne .not_first          ; If it isn't skip ahead to next part of state machine
 .first:
         mov bl, al              ; Store the first digit we've seen in %bx
+	mov cl, al  		; Also store it in %cx, as we ought to count it twice if it's the only digit
         jmp .read_char
 .not_first:
         mov cl, al              ; Store the digit in %cx, clobbering any previous value
         jmp .read_char
 .add_digits:
         mov al, bl              ; Move the first digit into %ax,
-	test cl, cl             ; Check to see if we've seen a second digit
-	jz .accumulate
-.add_second_digit:
-        mov dx, 10              ; If we have, multiply %ax then multiply by 10.
+        mov dx, 10              ; multiply %ax by 10
         mul dx                  
         add al, cl              ; Next, add on the second digit.
-.accumulate:
 	pop bx                  ; Now that we have our number, let's pop off the low part of the accumulator
 	add ax, bx              ; Add the number and accumulator, check for overflow
 	jnc .no_carry
@@ -130,7 +119,6 @@ part1:
 
 hex_table:
 	db '0123456789abcdef'
-
 
 ;; Prints contents of %ax as hex.
 ;; Clobbers %bx
