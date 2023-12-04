@@ -39,8 +39,6 @@ main:
 	begin_print
 	mov ax, bx
         call print_digits
-	mov ax, cx
-        call print_digits
 sleep:
         hlt                      ; Halts CPU until the next external interrupt is fired
         jmp sleep                ; Loop forever
@@ -81,7 +79,6 @@ dw 0xaa55                 ; Add boot magic word to mark us as bootable
 
 part1:
 	push 0
-	push 0
 .read_line:
 	xor ax, ax              ; Initialize %ax to 0
         xor bx, bx              ; Initialize %bx to 0 
@@ -107,16 +104,9 @@ part1:
         add al, cl              ; Next, add on the second digit.
 	pop bx                  ; Now that we have our number, let's pop off the low part of the accumulator
 	add ax, bx              ; Add the number and accumulator, check for overflow
-	jnc .no_carry
-.carry:
-	pop cx                  ; If there was overflow, then we need to update the high portion
-	inc cx                  ; Pop, increment, and push
-	push cx
-.no_carry:
 	push ax                 ; Finally, push the low portion.
 	jmp .read_line
 .done:
-	pop cx
 	pop bx
         ret
 
